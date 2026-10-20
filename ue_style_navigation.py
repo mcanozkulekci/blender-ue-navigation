@@ -1,11 +1,12 @@
 bl_info = {
     "name": "UE-Style Viewport Navigation",
     "author": "mehmetcanozkulekci",
-    "version": (1, 1, 0),
+    "version": (1, 2, 0),
     "blender": (4, 2, 0),
     "location": "3D Viewport: hold Right Mouse / Sidebar (N) > UE Nav",
     "description": "Unreal Engine style fly navigation: hold RMB to look, WASD to move, Q/E down/up, "
-                   "wheel while flying changes speed. Sidebar panel for camera speed, mouse settings, "
+                   "wheel while flying changes speed, G toggles Game View (hide grid, lines, gizmos). "
+                   "Sidebar panel for camera speed, mouse settings, "
                    "viewport transform and an optional UE mouse mapping (Alt+LMB orbit, Alt+RMB dolly, "
                    "MMB pan, F focus).",
     "category": "3D View",
@@ -278,6 +279,29 @@ class UENAV_OT_level_view(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class UENAV_OT_game_view(bpy.types.Operator):
+    """Game View (UE): hide/show grid, axes, outlines, light and camera lines and gizmos"""
+    bl_idname = "view3d.ue_game_view"
+    bl_label = "Toggle Game View"
+
+    @classmethod
+    def poll(cls, context):
+        return find_rv3d(context) is not None
+
+    def execute(self, context):
+        sd = context.space_data if getattr(context.space_data, "type", "") == "VIEW_3D" else None
+        if sd is None:
+            for a in context.screen.areas:
+                if a.type == "VIEW_3D":
+                    sd = a.spaces.active
+                    break
+        game = sd.overlay.show_overlays          # overlays on -> switch to game view
+        sd.overlay.show_overlays = not game
+        sd.show_gizmo = not game
+        self.report({"INFO"}, "Game View on" if game else "Game View off")
+        return {"FINISHED"}
+
+
 def _remap(self, context):
     unregister_keymaps()
     register_keymaps()
@@ -291,6 +315,13 @@ class UENAV_Preferences(bpy.types.AddonPreferences):
     speed_multiplier: bpy.props.FloatProperty(name="Speed Multiplier", default=1.0, min=0.01, soft_max=10.0)
     mouse_sensitivity: bpy.props.FloatProperty(name="Mouse Sensitivity", default=1.0, min=0.1, max=5.0)
     invert_y: bpy.props.BoolProperty(name="Invert Mouse Y", default=False)
+    game_view_key: bpy.props.EnumProperty(
+        name="Game View Key",
+        description="Key that toggles Game View. G replaces Blender's Grab shortcut (use the Move tool instead)",
+        items=(("G", "G (UE style, replaces Grab)", ""),
+               ("SHIFT_ACCENT", "Shift + `", ""),
+               ("NONE", "None (button only)", "")),
+        default="G", update=_remap)
     ue_mouse_mapping: bpy.props.BoolProperty(
         name="UE Mouse Mapping",
         description="Alt+LMB orbit, Alt+RMB dolly, MMB pan, F focus (Object Mode). Changes Blender defaults",
@@ -309,6 +340,7 @@ def draw_settings(layout, p):
     col.prop(p, "mouse_sensitivity", slider=True)
     col.prop(p, "invert_y")
     col.prop(p, "ue_mouse_mapping")
+    col.prop(p, "game_view_key")
 
 
 class UENAV_PT_base:
@@ -321,6 +353,10 @@ class UENAV_PT_main(UENAV_PT_base, bpy.types.Panel):
     bl_label = "Camera Speed & Mouse"
 
     def draw(self, context):
+        sd = context.space_data
+        game = sd is not None and sd.type == "VIEW_3D" and not sd.overlay.show_overlays
+        self.layout.operator("view3d.ue_game_view", text="Game View: ON" if game else "Game View: OFF",
+                             icon="HIDE_ON" if game else "HIDE_OFF", depress=game)
         draw_settings(self.layout, prefs(context))
 
 
@@ -372,12 +408,19 @@ class UENAV_PT_help(UENAV_PT_base, bpy.types.Panel):
                            ("Alt + LMB", "orbit"),
                            ("Alt + RMB", "dolly"),
                            ("MMB", "pan"),
-                           ("F", "focus selected")):
+                           ("F", "focus selected"),
+                           (GAME_VIEW_LABEL.get(prefs(context).game_view_key, "-"), "game view")):
             row = col.row()
             row.label(text=keys)
             row.label(text=what)
         if not prefs(context).ue_mouse_mapping:
             self.layout.label(text="Alt/MMB/F mapping is off", icon="INFO")
+
+
+GAME_VIEW_LABEL = {"G": "G", "SHIFT_ACCENT": "Shift + `", "NONE": "button"}
+# keymaps where G is Grab: the game-view item must sit in each of them to take precedence
+GRAB_KEYMAPS = ("3D View", "Object Mode", "Mesh", "Curve", "Armature", "Pose", "Lattice", "Metaball",
+                "Particle", "Sculpt", "Weight Paint", "Vertex Paint", "Image Paint")
 
 
 def register_keymaps():
@@ -393,6 +436,18 @@ def register_keymaps():
         use_ue = prefs().ue_mouse_mapping
     except KeyError:
         use_ue = True
+    try:
+        gv = prefs().game_view_key
+    except KeyError:
+        gv = "G"
+    if gv != "NONE":
+        for name in GRAB_KEYMAPS:
+            kmg = km if name == "3D View" else kc.keymaps.new(name=name, space_type="EMPTY")
+            if gv == "G":
+                kmi = kmg.keymap_items.new("view3d.ue_game_view", "G", "PRESS")
+            else:
+                kmi = kmg.keymap_items.new("view3d.ue_game_view", "ACCENT_GRAVE", "PRESS", shift=True)
+            addon_keymaps.append((kmg, kmi))
     if use_ue:
         addon_keymaps.append((km, km.keymap_items.new("view3d.rotate", "LEFTMOUSE", "PRESS", alt=True)))
         addon_keymaps.append((km, km.keymap_items.new("view3d.zoom", "RIGHTMOUSE", "PRESS", alt=True)))
@@ -410,7 +465,7 @@ def unregister_keymaps():
     addon_keymaps.clear()
 
 
-classes = (UENAV_ViewProps, UENAV_OT_fly, UENAV_OT_level_view, UENAV_Preferences,
+classes = (UENAV_ViewProps, UENAV_OT_fly, UENAV_OT_level_view, UENAV_OT_game_view, UENAV_Preferences,
            UENAV_PT_main, UENAV_PT_transform, UENAV_PT_camera, UENAV_PT_help)
 
 

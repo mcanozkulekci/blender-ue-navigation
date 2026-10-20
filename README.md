@@ -18,6 +18,9 @@ Single-file add-on, no dependencies. Tested on Blender 5.1 (macOS); requires Ble
 | **Alt + RMB** | Dolly * |
 | **MMB** | Pan * |
 | **F** (Object Mode) | Focus selected * |
+| **G** | Game View: hide/show grid, axes, outlines, light/camera lines and gizmos ** |
+
+\*\* G replaces Blender's Grab shortcut (use the Move tool, or pick *Shift + `* / *None* under **Game View Key** in the sidebar or add-on preferences).
 
 \* Optional UE mouse mapping, on by default. It changes Blender defaults (MMB pans instead of orbiting), so it can be switched off in the sidebar or in the add-on preferences.
 
@@ -25,7 +28,7 @@ Flying works in Object, Edit (mesh, curve, armature, lattice, metaball), Pose an
 
 ## Sidebar: N › UE Nav
 
-- **Camera Speed & Mouse** – camera speed slider (1–8, from 0.25 to 32 m/s), speed multiplier, mouse sensitivity, invert mouse Y, UE mouse mapping on/off.
+- **Camera Speed & Mouse** – Game View on/off button, camera speed slider (1–8, from 0.25 to 32 m/s), speed multiplier, mouse sensitivity, invert mouse Y, UE mouse mapping on/off, Game View key.
 - **Viewport Transform** – the eye position (X/Y/Z), yaw and pitch of the viewport, all editable, plus the viewport lens and a *Level View* button.
 - **Scene Camera** – align the active camera to the current view, or look through it.
 - **Shortcuts** – a short reminder of the controls.
